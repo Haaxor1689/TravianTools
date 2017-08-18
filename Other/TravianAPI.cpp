@@ -1,201 +1,162 @@
 #include "TravianAPI.hpp"
 
+#include <QApplication>
+#include <QDebug>
+#include <QThread>
+#include <QTimer>
+
 #include <windows.h>
-#include <string>
 #include <stdio.h>
 #include <iostream>
-#include <future> // std::async
+#include <future>
+#pragma comment(lib,"ws2_32.lib")
+
+#include "AppConfigs/AppConfigs.hpp"
+#include "WorkerThread.hpp"
 
 using namespace std;
 
-#pragma comment(lib,"ws2_32.lib")
+TravianAPI* TravianAPI::shared = new TravianAPI(QApplication::instance());
 
-void TravianAPI::requestApiKey(const std::string& email, const std::string& siteName, const std::string& siteURL, bool isPublic) {
-
-}
-
-void TravianAPI::updateSiteData(const std::string& privateApiKey, const std::string& email, const std::string& siteName, const std::string& siteURL, bool isPublic) {
+TravianAPI::TravianAPI(QObject *parent) : QObject(parent) {
 
 }
 
-void TravianAPI::getMapData(const std::string& privateApiKey) {
-	auto response = std::async(std::launch::async, sendRequest, {{"privateApiKey", privateApiKey}}});
+void TravianAPI::requestApiKey(const QString& email, const QString& siteName, const QString& siteUrl, bool isPublic) {
+	qDebug() << "requestApiKey (thread: " << QThread::currentThreadId() << ")";
+
+	auto thread = new WorkerThread(this);
+	thread->task = std::bind(&TravianAPI::sendRequest, this, "requestApiKey",
+	                         vector<pair<QString, QString>>{
+	                             {"email", email},
+	                             {"siteName", siteName},
+	                             {"siteUrl", siteUrl},
+	                             {"public", isPublic ? "true" : "false"}});
+	QObject::connect(thread, SIGNAL(resultReady(QString)), this, SIGNAL(requestApiKeyResponse(QString)));
+	thread->start();
 }
 
-std::string TravianAPI::sendRequest(std::initializer_list<std::pair<string, string> > list) {
-	if (WSAStartup(0x101, &wsaData) != 0)
-		throw std::exception("Error occured in WSAStartup.");
+void TravianAPI::updateSiteData(const QString& privateApiKey, const QString& email, const QString& siteName, const QString& siteUrl, bool isPublic) {
+	qDebug() << "updateSiteData (thread: " << QThread::currentThreadId() << ")";
 
-	long responseSize;
-	char* headerBuffer;
+	auto thread = new WorkerThread(this);
+	thread->task = std::bind(&TravianAPI::sendRequest, this, "updateSiteData",
+	                         vector<pair<QString, QString>>{
+	                             {"privateApiKey", privateApiKey},
+	                             {"email", email},
+	                             {"siteName", siteName},
+	                             {"siteUrl", siteUrl},
+	                             {"public", isPublic ? "true" : "false"}});
+	QObject::connect(thread, SIGNAL(resultReady(QString)), this, SIGNAL(updateSiteDataResponse(QString)));
+	thread->start();
 }
 
-HINSTANCE hInst;
-WSADATA wsaData;
-void mParseUrl(string url, string& serverName, string& filepath, string& filename);
-SOCKET connectToServer(char* szServerName, WORD portNum);
-int getHeaderLength(char* content);
-char* readUrl2(string& szUrl, long& bytesReturnedOut, char** headerOut);
+void TravianAPI::getMapData(const QString& privateApiKey) {
+	qDebug() << "getMapData ( thread: " << QThread::currentThreadId() << ")";
 
-int main() {
-	const int bufLen = 1024;
-	string szUrl = "http://com1x3.kingdoms.com/api/external.php";
+	auto thread = new WorkerThread(this);
+	thread->task = std::bind(&TravianAPI::sendRequest, this, "getMapData",
+	                         vector<pair<QString, QString>>{
+	                             {"privateApiKey", privateApiKey}});
+	QObject::connect(thread, SIGNAL(resultReady(QString)), this, SIGNAL(getMapDataResponse(QString)));
+	thread->start();
+}
 
-	long fileSize;
+QString TravianAPI::sendRequest(const QString& action, vector<pair<QString, QString>> list) {
+	qDebug() << "sendRequest ( thread: " << QThread::currentThreadId() << ")";
+	if (isSending) {
+		while (isSending) {}
+	}
+	isSending = true;
 
-	char* headerBuffer = nullptr;
+	QString serverName = Defaults::server() + ".kingdoms.com";
 
-	if (WSAStartup(0x101, &wsaData) != 0)
-		return -1;
-
-	char* memBuffer = readUrl2(szUrl, fileSize, &headerBuffer);
-
-	cout << "Returned from readUrl" << endl;
-	cout << "Data returned:\n" << memBuffer << endl;
-
-	if (fileSize != 0) {
-		cout << "Got some data" << endl;
-
-		FILE * fp = fopen("downloaded.txt", "wb");
-		fwrite(memBuffer, 1, fileSize, fp);
-		fclose(fp);
-		delete(memBuffer);
-		delete(headerBuffer);
+	// SetUp
+	WSADATA wsaData;
+	if (WSAStartup(0x101, &wsaData) != 0) {
+		qDebug() << "sendRequest error: WSAStartup failed.";
+		isSending = false;
+		return "";
 	}
 
-	WSACleanup();
-	return 0;
-}
-
-void mParseUrl(string url, string& serverName, string& filepath, string& filename) {
-	if (url.substr(0, 7) == "http://")
-		url.erase(0, 7);
-
-	if (url.substr(0, 8) == "https://")
-		url.erase(0, 8);
-
-	auto n = url.find('/');
-	if (n != string::npos) {
-		serverName = url.substr(0, n);
-		filepath = url.substr(n);
-		n = filepath.rfind('/');
-		filename = filepath.substr(n + 1);
-	} else {
-		serverName = url;
-		filepath = "/";
-		filename = "";
-	}
-}
-
-SOCKET connectToServer(char* szServerName, WORD portNum) {
 	struct hostent* hp;
 	struct sockaddr_in server;
 
-	SOCKET conn = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (conn == INVALID_SOCKET)
-		return NULL;
+	SOCKET connectionSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (connectionSocket == INVALID_SOCKET) {
+		qDebug() << "sendRequest error: INVALID_SOCKET.";
+		WSACleanup();
+		isSending = false;
+		return "";
+	}
 
-	if (inet_addr(szServerName) == INADDR_NONE) {
-		hp = gethostbyname(szServerName);
+	if (inet_addr(serverName.toLatin1().data()) == INADDR_NONE) {
+		hp = gethostbyname(serverName.toLatin1().data());
 	} else {
-		unsigned int addr = inet_addr(szServerName);
+		unsigned int addr = inet_addr(serverName.toLatin1().data());
 		hp = gethostbyaddr(reinterpret_cast<char*>(&addr), sizeof(addr), AF_INET);
 	}
 
 	if (hp == nullptr) {
-		closesocket(conn);
-		return NULL;
+		closesocket(connectionSocket);
+		qDebug() << "sendRequest error: hostent is nulltptr.";
+		WSACleanup();
+		isSending = false;
+		return "";
 	}
 
 	server.sin_addr.s_addr = *reinterpret_cast<unsigned long*>(hp->h_addr);
 	server.sin_family = AF_INET;
-	server.sin_port = htons(portNum);
-	if (connect(conn, reinterpret_cast<struct sockaddr*>(&server), sizeof(server))) {
-		closesocket(conn);
-		return NULL;
+	server.sin_port = htons(80);
+	if (::connect(connectionSocket, reinterpret_cast<struct sockaddr*>(&server), sizeof(server))) {
+		closesocket(connectionSocket);
+		qDebug() << "sendRequest error: Connection failed.";
+		WSACleanup();
+		isSending = false;
+		return "";
 	}
-	return conn;
-}
 
-int getHeaderLength(char* content) {
-	const char* srchStr1 = "\r\n\r\n", * srchStr2 = "\n\r\n\r";
-	int ofset = -1;
+	// Create message form list
+	QString message = "GET /api/external.php?action=" + action;
+	for (const auto& item : list)
+		message.append("&" + item.first + "=" + item.second);
+	message.append(" HTTP/1.0\r\nHost: " + serverName + "\r\n\r\n");
 
-	char * findPos = strstr(content, srchStr1);
-	if (findPos != nullptr) {
-		ofset = findPos - content;
-		ofset += strlen(srchStr1);
-	} else {
-		findPos = strstr(content, srchStr2);
-		if (findPos != nullptr) {
-			ofset = findPos - content;
-			ofset += strlen(srchStr2);
+	qDebug() << "sendRequest - Message:\n " << message;
+
+	// Send message
+	send(connectionSocket, message.toLatin1().data(), message.length(), 0);
+
+	// Time out timer
+	auto timeOut = new QTimer();
+	timeOut->setSingleShot(true);
+	timeOut->setInterval(5000);
+	QObject::connect(timeOut, SIGNAL(timeout()), this, SLOT(requestTimedOut()));
+	timeOut->start();
+
+	// Wait for response
+	QString response = "";
+	char buffer[2048];
+	unsigned responseLength = 0;
+	while (isSending) {
+		while ((responseLength = recv(connectionSocket, buffer, 2048, 0)) > 0) {
+			for (unsigned i = 0; i < responseLength; ++i)
+				response.append(buffer[i]);
 		}
+
+		break;
 	}
-	return ofset;
+
+	WSACleanup();
+	isSending = false;
+
+	int i = response.indexOf("\r\n\r\n");
+	response = response.remove(0, i + 4);
+
+	return response;
 }
 
-char* readUrl2(string& szUrl, long& bytesReturnedOut, char** headerOut) {
-	const int bufSize = 1024;
-	char readBuffer[bufSize];
-	char sendBuffer[bufSize];
-	char tmpBuffer[bufSize];
-	char* tmpResult = nullptr;
-
-	string server, filepath, filename;
-
-	mParseUrl(szUrl, server, filepath, filename);
-
-	///////////// step 1, connect //////////////////////
-	SOCKET conn = connectToServer(&server[0], 80);
-	//SOCKET conn = connectToServer("http://com1x3.kingdoms.com/", 80);
-
-	///////////// step 2, send GET request /////////////
-	sprintf(tmpBuffer, "GET %s HTTP/1.0", filepath.c_str());
-	strcpy(sendBuffer, tmpBuffer);
-	strcat(sendBuffer, "\r\n");
-	sprintf(tmpBuffer, "Host: %s", server.c_str());
-	strcat(sendBuffer, tmpBuffer);
-	strcat(sendBuffer, "\r\n");
-	strcat(sendBuffer, "\r\n");
-
-	string message = "GET /api/external.php?action=requestApiKey&email=betkomaros@gmail.com&siteName=TestTool&siteUrl=https://github.com/Haaxor1689&public=false HTTP/1.0\r\nHost: com1x3.kingdoms.com\r\n\r\n";
-
-	//send(conn, sendBuffer, strlen(sendBuffer), 0);
-	send(conn, &message[0], message.length(), 0);
-
-	//    SetWindowText(edit3Hwnd, sendBuffer);
-	printf("Buffer being sent:\n%s", sendBuffer);
-
-	///////////// step 3 - get received bytes ////////////////
-	// Receive until the peer closes the connection
-	long totalBytesRead = 0;
-	while (true) {
-		memset(readBuffer, 0, bufSize);
-		long thisReadSize = recv(conn, readBuffer, bufSize, 0);
-
-		if (thisReadSize <= 0)
-			break;
-
-		tmpResult = (char*)realloc(tmpResult, thisReadSize + totalBytesRead);
-
-		memcpy(tmpResult + totalBytesRead, readBuffer, thisReadSize);
-		totalBytesRead += thisReadSize;
-	}
-
-	long headerLen = getHeaderLength(tmpResult);
-	long contenLen = totalBytesRead - headerLen;
-	char* result = new char[contenLen + 1];
-	memcpy(result, tmpResult + headerLen, contenLen);
-	result[contenLen] = 0x0;
-
-	char * myTmp = new char[headerLen + 1];
-	strncpy(myTmp, tmpResult, headerLen);
-	myTmp[headerLen] = NULL;
-	delete(tmpResult);
-	*headerOut = myTmp;
-
-	bytesReturnedOut = contenLen;
-	closesocket(conn);
-	return (result);
+void TravianAPI::requestTimedOut() {
+	qDebug() << "requestTimedOut ( thread: " << QThread::currentThreadId() << ")";
+	isSending = false;
 }

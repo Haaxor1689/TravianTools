@@ -1,21 +1,32 @@
-#ifndef TRAVIANAPIREQUEST_HPP
-#define TRAVIANAPIREQUEST_HPP
+#ifndef TRAVIANAPI_HPP
+#define TRAVIANAPI_HPP
 
 #include <string>
+#include <QObject>
 
-class TravianAPI {
+class TravianAPI: public QObject {
+	Q_OBJECT
+	explicit TravianAPI(QObject *parent = nullptr);
 public:
-	TravianAPI() = delete;
+	static TravianAPI* shared;
 
-	static void requestApiKey(const std::string& email, const std::string& siteName, const std::string& siteURL, bool isPublic);
-	static void updateSiteData(const std::string& privateApiKey, const std::string& email, const std::string& siteName, const std::string& siteURL, bool isPublic);
-	static void getMapData(const std::string& privateApiKey);
+	bool isSending = false;
+
+	void requestApiKey(const QString& email, const QString& siteName, const QString& siteURL, bool isPublic);
+	void updateSiteData(const QString& privateApiKey, const QString& email, const QString& siteName, const QString& siteURL, bool isPublic);
+	void getMapData(const QString& privateApiKey);
+
 private:
-	static void sendRequest(std::initializer_list<std::pair<std::string, std::string>> list);
+	QString sendRequest(const QString& action, std::vector<std::pair<QString, QString>> list);
+	QString rawSend(const QString& server, const QString& message);
+
 signals:
-	static void requestApiKeyResponse(QString data);
-	static void updateSiteDataResponse(QString data);
-	static void getMapDataResponse(QString data);
+	void requestApiKeyResponse(QString data);
+	void updateSiteDataResponse(QString data);
+	void getMapDataResponse(QString data);
+
+public slots:
+	void requestTimedOut();
 };
 
-#endif // TRAVIANAPIREQUEST_HPP
+#endif // TRAVIANAPI_HPP
