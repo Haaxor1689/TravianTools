@@ -27,7 +27,7 @@ private:
 
 inline void to_json(nlohmann::json& json, const Gameworld& model) {
 	json = { { "date", model.date },
-	         { "lastUpdateTime", std::to_string(model.lastUpdateTime) },
+	         { "lastUpdateTime", model.lastUpdateTime },
 	         { "name", model.name.toStdString() },
 	         { "speed", model.speed },
 	         { "speedTroops", model.speedTroops },

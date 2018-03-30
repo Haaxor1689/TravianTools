@@ -4,7 +4,7 @@
 #include <QThread>
 #include <functional>
 
-class WorkerThread : public QThread {
+class WorkerThread: public QThread {
 	Q_OBJECT
 public:
 	std::function<QString()> task;

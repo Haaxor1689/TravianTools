@@ -18,9 +18,7 @@ using namespace std;
 
 TravianAPI* TravianAPI::shared = new TravianAPI(QApplication::instance());
 
-TravianAPI::TravianAPI(QObject *parent) : QObject(parent) {
-
-}
+TravianAPI::TravianAPI(QObject *parent) : QObject(parent) {}
 
 void TravianAPI::requestApiKey(const QString& email, const QString& siteName, const QString& siteUrl, bool isPublic) {
 	qDebug() << "requestApiKey (thread: " << QThread::currentThreadId() << ")";

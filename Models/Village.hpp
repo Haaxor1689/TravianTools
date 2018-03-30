@@ -29,20 +29,20 @@ inline void to_json(nlohmann::json& json, const Village& model) {
 	json = { { "isCity", model.isCity },
 	         { "isMainVillage", model.isMainVillage },
 	         { "name", model.name.toStdString() },
-	         { "population", std::to_string(model.population) },
-	         { "villageId", std::to_string(model.villageId) },
-	         { "x", std::to_string(model.x) },
-	         { "y", std::to_string(model.y) } };
+	         { "population", model.population },
+	         { "villageId", model.villageId },
+	         { "x", model.x },
+	         { "y", model.y } };
 }
 
 inline void from_json(const nlohmann::json& json, Village& model) {
 	model.isCity = json.at("isCity").get<bool>();
 	model.isMainVillage = json.at("isMainVillage").get<bool>();
 	model.name = QString::fromStdString(json.at("name").get<std::string>());
-	model.population = std::stoi(json.at("population").get<std::string>());
-	model.villageId = std::stoi(json.at("villageId").get<std::string>());
-	model.x = std::stoi(json.at("x").get<std::string>());
-	model.y = std::stoi(json.at("y").get<std::string>());
+	model.population = Utilities::getInt(json.at("population"));
+	model.villageId = Utilities::getInt(json.at("villageId"));
+	model.x = Utilities::getInt(json.at("x"));
+	model.y = Utilities::getInt(json.at("y"));
 }
 
 #endif // VILLAGE_HPP

@@ -8,8 +8,7 @@
 
 class Map {
 public:
-	std::vector<MapCell> cells;
-	nlohmann::json landscapes;
+	std::vector<Cell> cells;
 	unsigned radius;
 
 	Map() = default;
@@ -24,13 +23,11 @@ private:
 
 inline void to_json(nlohmann::json& json, const Map& model) {
 	json = { { "cells", model.cells },
-	         { "landscapes", model.landscapes },
-	         { "radius", std::to_string(model.radius) } };
+	         { "radius", model.radius } };
 }
 
 inline void from_json(const nlohmann::json& json, Map& model) {
-	model.cells = json.at("cells").get<std::vector<MapCell>>();
-	model.landscapes = json.at("landscapes");
+	model.cells = json.at("cells").get<std::vector<Cell>>();
 	model.radius = std::stoi(json.at("radius").get<std::string>());
 }
 

@@ -23,10 +23,10 @@ private:
 };
 
 inline void to_json(nlohmann::json& json, const Kingdom& model) {
-	json = { { "creationTime", std::to_string(model.creationTime) },
-	         { "kingdomId", std::to_string(model.kingdomId) },
+	json = { { "creationTime", model.creationTime },
+	         { "kingdomId", model.kingdomId },
 	         { "kingdomTag", model.kingdomTag.toStdString() },
-	         { "victoryPoints", std::to_string(model.victoryPoints) } };
+	         { "victoryPoints", model.victoryPoints } };
 }
 
 inline void from_json(const nlohmann::json& json, Kingdom& model) {

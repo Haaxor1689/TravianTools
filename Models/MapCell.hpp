@@ -1,46 +1,48 @@
 #ifndef MAPCELL_HPP
 #define MAPCELL_HPP
 
+#include <QString>
+
 #include "Other/json.hpp"
 
-class MapCell {
+class Cell {
 public:
 	unsigned id;
 	unsigned kingdomId;
-	unsigned landscape;
-	unsigned oasis;
-	unsigned resType;
+	QString landscape;
+	QString oasis;
+	QString resType;
 	int x;
 	int y;
 
-	MapCell() = default;
-	explicit MapCell(const nlohmann::json& json) {
-		*this = json.get<MapCell>();
+	Cell() = default;
+	explicit Cell(const nlohmann::json& json) {
+		*this = json.get<Cell>();
 	}
 
 private:
-	friend void to_json(nlohmann::json&, const MapCell&);
-	friend void from_json(const nlohmann::json&, MapCell&);
+	friend void to_json(nlohmann::json&, const Cell&);
+	friend void from_json(const nlohmann::json&, Cell&);
 };
 
-inline void to_json(nlohmann::json& json, const MapCell& model) {
-	json = { { "id", std::to_string(model.id) },
-	         { "kingdomId", std::to_string(model.kingdomId) },
-	         { "landscape", std::to_string(model.landscape) },
-	         { "oasis", std::to_string(model.oasis) },
-	         { "resType", std::to_string(model.id) },
-	         { "x", std::to_string(model.x) },
-	         { "y", std::to_string(model.y) } };
+inline void to_json(nlohmann::json& json, const Cell& model) {
+	json = { { "id", model.id },
+	         { "kingdomId", model.kingdomId },
+	         { "landscape", model.landscape.toStdString() },
+	         { "oasis", model.oasis.toStdString() },
+	         { "resType", model.resType.toStdString() },
+	         { "x", model.x },
+	         { "y", model.y } };
 }
 
-inline void from_json(const nlohmann::json& json, MapCell& model) {
+inline void from_json(const nlohmann::json& json, Cell& model) {
 	model.id = std::stoi(json.at("id").get<std::string>());
-	model.kingdomId = std::stoi(json.at("kingdomId").get<bool>());
-	model.landscape = std::stoi(json.at("landscape").get<std::string>());
-	model.oasis = std::stoi(json.at("oasis").get<std::string>());
-	model.resType = std::stoi(json.at("resType").get<std::string>());
-	model.x = std::stoi(json.at("x").get<std::string>());
-	model.y = std::stoi(json.at("y").get<std::string>());
+	model.kingdomId = Utilities::getInt(json.at("kingdomId"));
+	model.landscape = QString::fromStdString(json.at("landscape").get<std::string>());
+	model.oasis = QString::fromStdString(json.at("oasis").get<std::string>());
+	model.resType = QString::fromStdString(json.at("resType").get<std::string>());
+	model.x = Utilities::getInt(json.at("x"));
+	model.y = Utilities::getInt(json.at("y"));
 }
 
 #endif // MAPCELL_HPP
